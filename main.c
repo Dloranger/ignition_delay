@@ -109,6 +109,9 @@ int main(void)
 	ADC10CTL0 |= ENC + ADC10SC;             	// ADC Sampling and conversion start
 	//LowBatAlarmCounter = 50;
 
+	// Wait until either the ignition-less or physical ignition signals are detected
+	// to start normal functionality.  Basically prevent false starts when initial
+	// power is applied.  Vehicle has to be started to start the timer up
 	while (!(BatteryStatus & 0x01) & !((IGNITION_IN & IGNITION_PIN)==IGNITION_PIN))
 	{
 		ADC10CTL0 |= ENC + ADC10SC;             	// ADC Sampling and conversion start
