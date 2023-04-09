@@ -54,76 +54,76 @@ unsigned char UART_Configure (unsigned char BAUDRATE)
 	UCA0CTL1 |= UCSWRST;						// put state machine in reset
 	UART_PSEL |= UART_TX_PIN + UART_RX_PIN;
 	UCA0CTL1 = UCSSEL_2;                      // SMCLK
-switch (BAUDRATE)
-{
-	case 0x01:// 9600 from 1Mhz
-	{
-		UCA0BR0 = 104;
-		UCA0BR1 = 0;
-		UCA0MCTL = UCBRS_1;
-		break;
-	}
-	case 0x02:// 9600 from 2Mhz
-	{
-		UCA0BR0 = 0xDA;
-		UCA0BR1 = 0x0;
-		UCA0MCTL = UCBRS_6;
-		break;
-	}
-	case 0x04: // 9600 from 4Mhz
-	{
-		UCA0BR0 = 0xA0;
-		UCA0BR1 = 0x1;
-		UCA0MCTL = UCBRS_6;
-		break;
-	}
-	case 0x06:// 9600 from 6Mhz
-	{
-		UCA0BR0 = 0x7B;
-		UCA0BR1 = 0x2;
-		UCA0MCTL = UCBRS_3;
-		break;
-	}
-	case 0x08:// 9600 from 8Mhz
-	{
-		UCA0BR0 = 0x41;
-		UCA0BR1 = 0x03;
-		UCA0MCTL = UCBRS_2;
-		break;
-	}
-	case 0x0A:// 9600 from 10Mhz
-	{
-		UCA0BR0 = 0x79;
-		UCA0BR1 = 0x4;
-		UCA0MCTL = UCBRS_7;
-		break;
-	}
-	case 0x0C: // 9600 from 12Mhz
-	{
-		UCA0BR0 = 0xE2;
-		UCA0BR1 = 0x4;
-		UCA0MCTL = 0;
-		break;
-	}
-	case  0x10:// 9600 from 16Mhz
-	{
-		UCA0BR0 = 0x82;
-		UCA0BR1 = 0x6;
-		UCA0MCTL = UCBRS_6;
-		break;
-	}
-	case 0x20:// 16 MHz->115200
-	{
-		UCA0BR0 = 0x8A;
-		UCA0BR1 = 0x00;
-		UCA0MCTL = UCBRS_7;
-		break;
-	}
-default:
-	{
-		break;
-	}
-}
+    switch (BAUDRATE)
+    {
+        case 0x01:// 9600 from 1Mhz
+        {
+            UCA0BR0 = 104;
+            UCA0BR1 = 0;
+            UCA0MCTL = UCBRS_1;
+            break;
+        }
+        case 0x02:// 9600 from 2Mhz
+        {
+            UCA0BR0 = 0xDA;
+            UCA0BR1 = 0x0;
+            UCA0MCTL = UCBRS_6;
+            break;
+        }
+        case 0x04: // 9600 from 4Mhz
+        {
+            UCA0BR0 = 0xA0;
+            UCA0BR1 = 0x1;
+            UCA0MCTL = UCBRS_6;
+            break;
+        }
+        case 0x06:// 9600 from 6Mhz
+        {
+            UCA0BR0 = 0x7B;
+            UCA0BR1 = 0x2;
+            UCA0MCTL = UCBRS_3;
+            break;
+        }
+        case 0x08:// 9600 from 8Mhz
+        {
+            UCA0BR0 = 0x41;
+            UCA0BR1 = 0x03;
+            UCA0MCTL = UCBRS_2;
+            break;
+        }
+        case 0x0A:// 9600 from 10Mhz
+        {
+            UCA0BR0 = 0x79;
+            UCA0BR1 = 0x4;
+            UCA0MCTL = UCBRS_7;
+            break;
+        }
+        case 0x0C: // 9600 from 12Mhz
+        {
+            UCA0BR0 = 0xE2;
+            UCA0BR1 = 0x4;
+            UCA0MCTL = 0;
+            break;
+        }
+        case  0x10:// 9600 from 16Mhz
+        {
+            UCA0BR0 = 0x82;
+            UCA0BR1 = 0x6;
+            UCA0MCTL = UCBRS_6;
+            break;
+        }
+        case 0x20:// 16 MHz->115200
+        {
+            UCA0BR0 = 0x8A;
+            UCA0BR1 = 0x00;
+            UCA0MCTL = UCBRS_7;
+            break;
+        }
+    default:
+        {
+            break;
+        }
+    }
 	P1SEL2 = UART_TX_PIN + UART_RX_PIN; 		// P1.1 = RXD, P1.2=TXD
 	UCA0CTL1 &= ~UCSWRST;                     // **Initialize USCI state machine**
 	IE2 |= UCA0RXIE;                          // Enable USCI_A0 RX interrupt

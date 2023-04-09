@@ -109,16 +109,18 @@ int main(void)
 	ADC10CTL0 |= ENC + ADC10SC;             	// ADC Sampling and conversion start
 	//LowBatAlarmCounter = 50;
 
-	// Wait until either the ignition-less or physical ignition signals are detected
-	// to start normal functionality.  Basically prevent false starts when initial
-	// power is applied.  Vehicle has to be started to start the timer up
-	while (!(BatteryStatus & 0x01) & !((IGNITION_IN & IGNITION_PIN)==IGNITION_PIN))
-	{
-		ADC10CTL0 |= ENC + ADC10SC;             	// ADC Sampling and conversion start
-		CheckBatteryStatus();
-		//LowBatAlarmCounter--;
-		__bis_SR_register(LPM0_bits + GIE);			// Enter low power mode with interrupts
-	}
+    // Wait until either the ignition-less or physical ignition signals are detected
+    // to start normal functionality.  Basically prevent false starts when initial
+    // power is applied.  Vehicle has to be started to start the timer up
+#ifdef SafeStart
+    while (!(BatteryStatus & 0x01) & !((IGNITION_IN & IGNITION_PIN)==IGNITION_PIN))
+    {
+        ADC10CTL0 |= ENC + ADC10SC;                 // ADC Sampling and conversion start
+        CheckBatteryStatus();
+        //LowBatAlarmCounter--;
+        __bis_SR_register(LPM0_bits + GIE);         // Enter low power mode with interrupts
+    }
+#endif
 	BatteryLevel = 12.4;
 	// write battery level to OUTput
 
@@ -651,13 +653,15 @@ void ConfigureTimer1(void)
 }
 void ConfigureTimer2(void)
 {
-	int setting = 9;
+
 #if ((HW_REV==0x2C))
     setting = ((TIMER2c_IN & TIMER2c_PIN)+(TIMER2b_IN & TIMER2b_PIN)+(TIMER2a_IN & TIMER2a_PIN));
 #elif HW_REV==0x3C
 	setting = ((TIMER2b_IN & TIMER2b_PIN)+(TIMER2a_IN & TIMER2a_PIN))>>1;
 #elif HW_REV==0x5c
 	setting = ((TIMER2b_IN & TIMER2b_PIN)+(TIMER2a_IN & TIMER2a_PIN))>>4;
+#else
+	const char setting = 9;
 #endif
 
 	switch (setting)
@@ -675,11 +679,12 @@ void ConfigureTimer2(void)
 }
 void ConfigureTimer3(void)
 {
-	int setting = 9;
 #if HW_REV==0x3C
 	setting = ((TIMER3b_IN & TIMER3b_PIN)+(TIMER3a_IN & TIMER3a_PIN));
 #elif HW_REV==0x5C
 	setting = ((TIMER3b_IN & TIMER3b_PIN)+(TIMER3a_IN & TIMER3a_PIN))>>4;
+#else
+	const char setting = 9;
 #endif
 
 	switch (setting)
@@ -1076,17 +1081,15 @@ unsigned char ConfigureAndSelfTest(void)
 #endif
 
 #ifdef selfProgram
-
-
     if (0xFFFF == *((int *) RESISTOR_R7))
             {
                 //Program Voltage divider values
                 //Setup the battery sense circuit
-                writeCal(3300, 10000,1500);
+                writeCal(3280, 10000,1500);
 
                 //Setup delays
                 writeDelay(
-                        (2),      //Heartbeat (sec)
+                        (2),  //Heartbeat (sec)
                         (3),  //OverVoltage (sec)
                         (3),  //Undervoltage (sec)
                         (13500),  // Sense turn on Voltage (mV)
@@ -1095,7 +1098,7 @@ unsigned char ConfigureAndSelfTest(void)
 
                 //Setup thresholds
                 writeThresholds(
-                        (11450), //Low Warning
+                        (11800), //Low Warning
                         (11000),    //Low Critical
                         (18000));  //High Critical
 

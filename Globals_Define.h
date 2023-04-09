@@ -2,8 +2,8 @@
 #define selfProgram 0x01
 #define ENABLED		0x01
 #define DISABLED 	0x00
-//#define HW_REV	0x1C	// 1 Channel
-#define HW_REV	0x2C	// 2 Channel - not released
+#define HW_REV	0x1C	// 1 Channel
+//#define HW_REV	0x2C	// 2 Channel - not released
 //#define HW_REV	0x3C	// 3 Channel - not released
 //#define HW_REV	0x5C	// 5 Channel - not released
 //#define HW_REV	0xFC	// 16 Channel (Dash controller) - not released
@@ -18,6 +18,8 @@ extern unsigned char StatusBits;
 
 extern unsigned const char InvalidCommand;
 
+/******************************* Safe start option *****************************/
+//#define SafeStart 0x01
 
 /******************************* UART SIGNALS **********************************/
 
