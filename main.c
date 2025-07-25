@@ -6,12 +6,18 @@
 #include "stdio.h"
 #include "stdint.h"
 
+const unsigned int SelfProgramMV = 3300;
 const unsigned long HBDelayCorrectionFactor = 20;
 const unsigned long TimerDelayCorrectionFactor = 20;
 const unsigned long LowBatAlarmCorrectionFactor = 20;
-float LowBatAlarmDelay = 0.5;  // Alarm on timing (secs) when LowBatAlarmMode == 1, default is 0.1
-const unsigned long LowBatAlarmDelay2 = 60;// Alarm on timing (secs) when LowBatAlarmMode == 1, default is 60
+float LowBatAlarmDelay = 0.1;  // Pulse Width (secs) when LowBatAlarmMode == 1, default is 0.1
+const float LowBatAlarmDelay2 = 60;// Alarm on timing (secs) when LowBatAlarmMode == 1, default is 60
 const unsigned char	LowBatAlarmMode = 1;  // 0 is constant on for and LED or etc, 1 is for a remote start pulse.
+const unsigned char LowBatAlarmMode2 = 0;  // 0 is constant on for and LED or etc, 1 is for a remote start pulse during critical low bat.
+const unsigned char LowBatAlarmModePulseType = 1;  // 0 is Active High, 1 is for Active Low.
+
+//const int LowBatAlarmHysteresis = LowBatAlarmDelay2*LowBatAlarmCorrectionFactor *0.95;
+const int LowBatAlarmHysteresis = 60*20*0.95;
 
 /******************************* External devices **************************/
 void ConfigureSPIBUS(void);
@@ -53,7 +59,9 @@ void HeartBeat(void);
 void CheckBatteryStatus(void);
 void RED_LED(void);
 void GRN_LED(void);
-
+void SendLowBatPulses(void);
+void LowBatAlarm(char);
+void LowBatAlarmInit (void);
 /******************************* Self Test  *****************************/
 unsigned char ConfigureAndSelfTest(void);
 unsigned int	StarterDropVolt;				// mVolts
@@ -62,6 +70,7 @@ unsigned char 	Heartbeat;
 
 /*********************************************** GLOBAL VARIABLES ********************/
 unsigned long	LowBatAlarmCounter	= 0;
+unsigned long   LowBatAlarmCounter2  = 0;
 unsigned int 	TimerCount 			= 0;
 unsigned long 	CountDown1 			= 0;
 unsigned long 	CountDown2 			= 0;
@@ -126,10 +135,6 @@ int main(void)
 
 	for(;;)  // Run forever
 	{
-		if (LowBatAlarmCounter)
-		{
-			LowBatAlarmCounter--;
-		}
 		CheckBatteryStatus();
 		RED_LED();
 		GRN_LED();
@@ -185,12 +190,15 @@ int main(void)
 			default: // continue to next case
 			case 0x00: // battery is normal, no ignition sense signal
 			{
-			    LowBatAlarmCounter=0;
-				// RESET Low Battery Alarm
+				// allow full low battery pulse duration if crossing
 #ifdef LowBatAlarm_DIR
-				if (!LowBatAlarmCounter)
+				if (LowBatAlarmCounter | LowBatAlarmCounter2)
 				{
-					LowBatAlarm_OUT &= ~LowBatAlarm_PIN;
+				    LowBatAlarm(LowBatAlarmMode);
+				}
+				else
+				{
+				    LowBatAlarmInit();
 				}
 #endif
 				break;
@@ -203,10 +211,10 @@ int main(void)
 				UnderVoltageCount = 0;
 				// RESET Low Battery Alarm
 #ifdef LowBatAlarm_DIR
-				if (!LowBatAlarmCounter)
-				{
-					LowBatAlarm_OUT &= ~LowBatAlarm_PIN;
-				}
+				if (LowBatAlarmCounter | LowBatAlarmCounter2)
+				   {
+				       LowBatAlarm(LowBatAlarmMode);
+				   }
 #endif
 				//Check if Ignition Sense is enabled
 				if ((IgnitionSenseEnable_IN & IgnitionSenseEnable_PIN) == IgnitionSenseEnable_PIN) // ignition sense enabled
@@ -251,42 +259,8 @@ int main(void)
 			{
 				//RESET Over Voltage Counter
 				OverVoltageCount = 0;
-				// SET Low Battery Alarm
 #ifdef LowBatAlarm_DIR
-				if (LowBatAlarmMode==0)
-				{
-				LowBatAlarm_OUT |= LowBatAlarm_PIN;
-				LowBatAlarmCounter = LowBatAlarmDelay * LowBatAlarmCorrectionFactor;
-				}
-				else
-				{
-					switch (LowBatAlarmState)
-					{
-					case 0://Set Timer value
-						LowBatAlarm_OUT |= LowBatAlarm_PIN;
-						LowBatAlarmCounter = LowBatAlarmDelay * LowBatAlarmCorrectionFactor;
-						LowBatAlarmState = 1;
-						break;
-					case 1: //Count Down Timer
-						if (!LowBatAlarmCounter)
-						{
-							LowBatAlarm_OUT &= ~LowBatAlarm_PIN;
-							LowBatAlarmCounter = LowBatAlarmDelay2 * LowBatAlarmCorrectionFactor;
-							LowBatAlarmState = 2;
-
-						}
-						break;
-					case 2: //Enforce lowBatAlarm signal delay
-					{
-						if (!LowBatAlarmCounter)
-						{
-							LowBatAlarmState = 0;
-						}
-					}
-					break;
-					default: LowBatAlarmState = 0;
-					}//Switch
-				}//Else
+                LowBatAlarm(LowBatAlarmMode);
 #endif
 				// RESET under voltage count (above critical level)
 				UnderVoltageCount = 0;
@@ -295,38 +269,7 @@ int main(void)
 			case 0x10: // Battery is below low critical threshold
 			{
 #ifdef LowBatAlarm_DIR
-				if (LowBatAlarmMode==0)
-				{
-				LowBatAlarm_OUT |= LowBatAlarm_PIN;
-				LowBatAlarmCounter = LowBatAlarmDelay * LowBatAlarmCorrectionFactor;
-				}
-				else
-				{
-					switch (LowBatAlarmState)
-					{
-					case 0://Set Timer value
-						LowBatAlarm_OUT |= LowBatAlarm_PIN;
-						LowBatAlarmCounter = LowBatAlarmDelay * LowBatAlarmCorrectionFactor;
-						LowBatAlarmState = 1;
-						break;
-					case 1: //Count Down Timer
-						if (!LowBatAlarmCounter)
-						{
-							LowBatAlarm_OUT &= ~LowBatAlarm_PIN;
-							LowBatAlarmCounter = LowBatAlarmDelay2;
-							LowBatAlarmState = 2;
-							break;
-						}
-					case 2: //Enforce lowBatAlarm signal delay
-					{
-						if (!LowBatAlarmCounter)
-						{
-							LowBatAlarmState = 0;
-						}
-					}
-					default: LowBatAlarmState = 0;
-					}//Switch
-				}//Else
+				LowBatAlarm(LowBatAlarmMode2);
 #endif
 				//RESET Over Voltage Counter
 				OverVoltageCount = 0;
@@ -387,7 +330,7 @@ int main(void)
 			// write battery level to OUTput
 		//	unsigned char BatPrint[13];
 		//	unsigned int batV = BatteryLevel;
-		//	unsigned int batmV = (BatteryLevel -batV)*100;
+		//	unsigned int batmV = (BatteryLevel -batV)*100;z
 		//	sprintf(BatPrint,"VOLTS:%02d.%02d\r\n",batV, batmV);
 		//	uartSend (BatPrint, sizeof(BatPrint));
 		//}
@@ -396,6 +339,51 @@ int main(void)
 	}
 }
 
+void SendLowBatPulses (void)
+{
+    switch (LowBatAlarmState)
+    {
+    case 0://Set Timer value
+        LowBatAlarm_OUT ^= LowBatAlarm_PIN;
+
+        LowBatAlarmCounter = LowBatAlarmDelay * LowBatAlarmCorrectionFactor;
+        LowBatAlarmState = 1;
+        break;
+    case 1: //Count Down Timer
+        if (!LowBatAlarmCounter)
+        {
+            LowBatAlarmInit();
+            LowBatAlarmCounter2 = LowBatAlarmDelay2 * LowBatAlarmCorrectionFactor;
+            LowBatAlarmState = 2;
+        }
+        else {LowBatAlarmCounter--;}
+        break;
+    case 2: //Enforce lowBatAlarm signal delay
+    {
+        if (!LowBatAlarmCounter2){LowBatAlarmState = 0;}
+        else {LowBatAlarmCounter2--;}
+    }
+    break;
+    }
+}
+void LowBatAlarmInit(void)
+{
+    //choose the default pin state, this is the opposite of the pulse type so logic inverted
+    if (LowBatAlarmModePulseType==0){LowBatAlarm_OUT |= LowBatAlarm_PIN;}
+    else {LowBatAlarm_OUT &= ~LowBatAlarm_PIN;}
+}
+void LowBatAlarm(char LowBatAlarmModel)
+{
+    if (LowBatAlarmModel==0){
+
+        LowBatAlarmInit();
+        //LowBatAlarmCounter = LowBatAlarmDelay * LowBatAlarmCorrectionFactor;
+     }
+     else
+     {
+         SendLowBatPulses();
+     }
+}
 void RED_LED(void)
 {
 #ifdef RED_LED_OUT
@@ -574,7 +562,7 @@ void CheckBatteryStatus(void)
 	{
 		// Check for running voltage
 		if ((BatteryLevelmV > (* ((int *) IgnitionlessRunningVolt_PTR)))|	// reached turn-on voltage
-				((BatteryLevelmV >= (* ((int *) IgnitionlessTurnOffVolt_PTR))) & (BatteryStatusOld & BIT0))) // above turnoff, already running,
+				((BatteryLevelmV >= (* ((int *) IgnitionlessTurnOffVolt_PTR))) & (BatteryStatusOld & BIT0))) // above turn off, already running,
 		{
 			BatteryStatus |= BIT0;
 		}
@@ -582,14 +570,16 @@ void CheckBatteryStatus(void)
 	// Check for Battery Monitor Issues
 	if ((VoltageMonitorEnable_IN & VoltageMonitorEnable_PIN) == VoltageMonitorEnable_PIN)  // check for battery monitor enabled
 	{
+	    //Low voltage warning state
 		if ((BatteryLevelmV < * ((int *) LowBatWarn_PTR)) & (BatteryLevelmV > * ((int *) LowBatCritical_PTR)))
 		{
-			OverVoltageCount = 0;
-			UnderVoltageCount = 0;
-			BatteryStatus |= BIT3;
+            OverVoltageCount = 0;
+            UnderVoltageCount = 0;
+		    BatteryStatus |= BIT3;
 		}
 		else
 		{
+		    //Critical low
 			if (BatteryLevelmV <= (* ((int *) LowBatCritical_PTR)))
 			{
 				OverVoltageCount = 0;
@@ -598,6 +588,7 @@ void CheckBatteryStatus(void)
 			}
 			else
 			{
+			    //critical high
 				if (BatteryLevelmV >= (* ((int *) HighBatCritical_PTR)))
 				{
 					UnderVoltageCount = 0;
@@ -637,6 +628,8 @@ void ConfigureTimer1(void)
 	setting = ((TIMER1b_IN & TIMER1b_PIN)+(TIMER1a_IN & TIMER1a_PIN))>>2;
 #elif HW_REV==0xFC
 	setting = ((TIMER1c_IN & TIMER1c_PIN)+(TIMER1b_IN & TIMER1b_PIN)+(TIMER1a_IN & TIMER1a_PIN));
+#else
+    const char setting = 9;
 #endif
 	switch (setting)
 	{
@@ -653,7 +646,7 @@ void ConfigureTimer1(void)
 }
 void ConfigureTimer2(void)
 {
-
+    int setting = 9;
 #if ((HW_REV==0x2C))
     setting = ((TIMER2c_IN & TIMER2c_PIN)+(TIMER2b_IN & TIMER2b_PIN)+(TIMER2a_IN & TIMER2a_PIN));
 #elif HW_REV==0x3C
@@ -734,7 +727,7 @@ void Timer1(void)
 	if (CountDown1 == 0)
 	{
 #ifdef OutputDriver1_OUT
-		OutputDriver1_OUT &= ~OutputDriver1_PIN;													// Turn OFF OUTPUT
+        OutputDriver1_OUT &= ~OutputDriver1_PIN;                                                    // Turn OFF OUTPUT
 #endif
 #ifdef SPI_CS_OUT
     	writeMCP23S17(1, GPIOA, 0x00);										// Turn OFF OUTPUT
@@ -855,7 +848,7 @@ unsigned char ConfigureAndSelfTest(void)
 	//Configure Low Battery Alarm
 #ifdef LowBatAlarm_DIR
 	//Configure Low Bat Alarm
-	LowBatAlarm_OUT	&= ~LowBatAlarm_PIN;					//Start with OUTput off
+	LowBatAlarmInit();				//Start with OUTput off
 	LowBatAlarm_DIR |= LowBatAlarm_PIN;					//Configure as OUTput
 
 	if (LowBatAlarmResEnable)
@@ -974,6 +967,14 @@ unsigned char ConfigureAndSelfTest(void)
 		TIMER2b_REN |= TIMER2b_PIN;						//Enable Pull Resistor
 	}
 #endif
+#ifdef TIMER2c_DIR
+    TIMER2c_DIR &= ~TIMER2c_PIN;                        //Configure as input
+    TIMER2c_OUT &= ~TIMER2c_PIN;                        //Pull Down Resistor as pin is input
+    if (TIMER2cResEnable)
+    {
+        TIMER2c_REN |= TIMER2c_PIN;                     //Enable Pull Resistor
+    }
+#endif
 	//Configure timer 3a
 #ifdef TIMER3a_DIR
 	TIMER3a_DIR &= ~TIMER3a_PIN;						//Configure as input
@@ -1085,21 +1086,21 @@ unsigned char ConfigureAndSelfTest(void)
             {
                 //Program Voltage divider values
                 //Setup the battery sense circuit
-                writeCal(3280, 10000,1500);
+                writeCal(SelfProgramMV, 10000,1500);
 
                 //Setup delays
                 writeDelay(
                         (2),  //Heartbeat (sec)
                         (3),  //OverVoltage (sec)
-                        (3),  //Undervoltage (sec)
-                        (13500),  // Sense turn on Voltage (mV)
-                        (13000),  // Sense turn Off Voltage (mv)
+                        (5),  //Undervoltage (sec)
+                        (13200),  // Sense turn on Voltage (mV)
+                        (12800),  // Sense turn Off Voltage (mv)
                         (200));   // Heart Beat duration (sec)
 
                 //Setup thresholds
                 writeThresholds(
                         (11800), //Low Warning
-                        (11000),    //Low Critical
+                        (11600),    //Low Critical
                         (18000));  //High Critical
 
                 // Setup Timers
